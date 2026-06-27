@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>증거 아카이브 — Evidence Archive</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{--bg:#0a0a0d;--surface:#13131a;--surface2:#1a1a24;--surface3:#20202e;--border:#252535;--border2:#2e2e45;--accent:#7c6af7;--accent2:#a89cf7;--accent-dim:rgba(124,106,247,0.12);--dc:#ff6b35;--dc-dim:rgba(255,107,53,0.12);--tw:#1d9bf0;--tw-dim:rgba(29,155,240,0.12);--deleted:#f7516a;--deleted-dim:rgba(247,81,106,0.12);--success:#52d68a;--success-dim:rgba(82,214,138,0.12);--warn:#f7c76a;--warn-dim:rgba(247,199,106,0.12);--text:#e4e4f0;--text-sub:#8888aa;--text-muted:#555570;--mono:'JetBrains Mono',monospace;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;}
+.app{display:flex;height:100vh;overflow:hidden;}
+
+.sidebar{width:270px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.sidebar-header{padding:16px;border-bottom:1px solid var(--border);}
+.sidebar-logo{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:4px;}
+.sidebar-title{font-size:13px;font-weight:700;}
+.sidebar-desc{font-size:10px;color:var(--text-muted);margin-top:4px;line-height:1.5;}
+.sync-status{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:10px;color:var(--success);}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--success);}
+.sync-status.offline{color:var(--deleted);}.sync-status.offline .sync-dot{background:var(--deleted);}
+.sync-status.syncing{color:var(--warn);}.sync-status.syncing .sync-dot{background:var(--warn);}
+
+.sidebar-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:12px 16px;border-bottom:1px solid var(--border);}
+.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center;}
+.stat-val{font-size:18px;font-weight:700;}
+.stat-val.dc{color:var(--dc);}.stat-val.tw{color:var(--tw);}.stat-val.all{color:var(--accent);}
+.stat-lbl{font-size:9px;color:var(--text-muted);margin-top:2px;letter-spacing:1px;}
+
+.sidebar-filter{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:6px;}
+.filter-btn{flex:1;padding:5px 0;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text-sub);font-size:10px;font-family:'Noto Sans KR';cursor:pointer;transition:all .15s;font-weight:500;}
+.filter-btn:hover{border-color:var(--accent);color:var(--text);}
+.filter-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+.filter-btn.dc-active{background:var(--dc-dim);border-color:var(--dc);color:var(--dc);}
+.filter-btn.tw-active{background:var(--tw-dim);border-color:var(--tw);color:var(--tw);}
+
+.evidence-list{flex:1;overflow-y:auto;padding:8px;}
+.ev-item{padding:10px 12px;border-radius:6px;border:1px solid var(--border);margin-bottom:6px;cursor:pointer;transition:all .15s;background:var(--surface2);}
+.ev-item:hover{border-color:var(--border2);}
+.ev-item.active{border-color:var(--accent);background:var(--accent-dim);}
+.ev-item.deleted-item{border-left:2px solid var(--deleted);}
+.ev-item-top{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+.platform-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.dot-dc{background:var(--dc);}.dot-tw{background:var(--tw);}
+.ev-num{font-size:9px;font-family:var(--mono);color:var(--text-muted);background:var(--surface3);padding:1px 5px;border-radius:2px;}
+.ev-type-tag{font-size:9px;padding:1px 6px;border-radius:2px;font-weight:500;}
+.tag-dc{background:var(--dc-dim);color:var(--dc);}.tag-tw{background:var(--tw-dim);color:var(--tw);}
+.del-tag{font-size:9px;padding:1px 5px;border-radius:2px;background:var(--deleted-dim);color:var(--deleted);margin-left:auto;}
+.archived-tag{font-size:9px;padding:1px 5px;border-radius:2px;background:var(--success-dim);color:var(--success);margin-left:auto;}
+.ev-item-date{font-size:10px;font-family:var(--mono);color:var(--text-muted);margin-bottom:3px;}
+.ev-item-summary{font-size:11px;color:var(--text-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.add-evidence-btn{margin:8px;padding:10px;background:var(--accent-dim);border:1px dashed rgba(124,106,247,0.4);border-radius:6px;color:var(--accent);font-size:12px;font-family:'Noto Sans KR';cursor:pointer;width:calc(100% - 16px);transition:all .15s;}
+.add-evidence-btn:hover{background:rgba(124,106,247,0.2);}
+.backup-bar{padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:6px;background:var(--surface2);}
+.backup-btn{flex:1;padding:7px 0;border-radius:5px;font-size:10px;font-weight:700;font-family:'Noto Sans KR';cursor:pointer;border:1px solid var(--border2);transition:all .15s;}
+.backup-save{background:var(--accent-dim);color:var(--accent2);}.backup-load{background:var(--success-dim);color:var(--success);}
+
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);}
+.archive-banner{background:linear-gradient(135deg,rgba(82,214,138,0.1),rgba(124,106,247,0.06));border-bottom:1px solid rgba(82,214,138,0.2);padding:10px 20px;font-size:11px;color:#9ce0b8;display:flex;align-items:center;gap:8px;}
+.archive-banner strong{color:var(--success);}
+.main-toolbar{padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface);}
+.toolbar-title{font-size:12px;font-weight:700;flex:1;}
+.toolbar-btn{padding:6px 14px;border-radius:5px;font-size:11px;font-family:'Noto Sans KR';font-weight:500;cursor:pointer;border:none;transition:all .15s;}
+.btn-archive{background:var(--success-dim);color:var(--success);border:1px solid rgba(82,214,138,0.3);}
+.btn-delete-ev{background:var(--deleted-dim);color:var(--deleted);border:1px solid rgba(247,81,106,0.3);}
+.btn-timeline{background:var(--surface2);color:var(--text-sub);border:1px solid var(--border);}
+.btn-pdf{background:var(--accent);color:white;}
+.main-content{flex:1;overflow-y:auto;padding:20px;}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);gap:12px;}
+.empty-icon{font-size:40px;opacity:0.3;}
+
+.smart-panel{background:linear-gradient(135deg,rgba(124,106,247,0.08),rgba(29,155,240,0.05));border:1px solid var(--accent);border-radius:8px;margin-bottom:14px;overflow:hidden;}
+.smart-header{padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border2);background:var(--accent-dim);}
+.smart-title{font-size:11px;font-weight:700;color:var(--accent2);letter-spacing:.5px;}
+.smart-badge{font-size:9px;padding:2px 7px;border-radius:3px;background:var(--accent);color:white;margin-left:auto;font-weight:700;}
+.smart-body{padding:14px 16px;}
+.smart-row-label{font-size:10px;color:var(--text-sub);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.smart-step-num{width:16px;height:16px;border-radius:50%;background:var(--accent);color:white;font-size:9px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;}
+.smart-input-group{display:flex;gap:8px;}
+.smart-input{flex:1;background:var(--surface3);border:1px solid var(--border2);border-radius:6px;padding:8px 12px;color:var(--text);font-size:11px;font-family:var(--mono);outline:none;}
+.smart-input:focus{border-color:var(--accent);}
+.smart-input::placeholder{color:var(--text-muted);font-family:'Noto Sans KR';}
+.smart-btn{padding:8px 16px;border-radius:6px;border:none;background:var(--accent);color:white;font-size:11px;font-weight:700;font-family:'Noto Sans KR';cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.parse-result{margin-top:8px;padding:8px 12px;background:var(--surface3);border-radius:6px;font-size:10px;font-family:var(--mono);color:var(--success);display:none;}
+.parse-result.show{display:block;}.parse-result.error{color:var(--deleted);}
+
+.form-section{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;overflow:hidden;}
+.form-section.optional-section{border-style:dashed;opacity:.92;}
+.form-section-header{background:var(--surface2);padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);}
+.section-label{font-size:11px;font-weight:700;color:var(--text-sub);letter-spacing:.5px;}
+.section-optional-badge{font-size:9px;padding:2px 8px;border-radius:3px;margin-left:auto;font-weight:700;}
+.field-grid{display:grid;grid-template-columns:130px 1fr;}
+.f-label{padding:10px 14px;background:var(--surface2);font-size:11px;color:var(--text-sub);border-right:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;font-weight:500;}
+.f-input{padding:10px 14px;background:transparent;border:none;border-bottom:1px solid var(--border);outline:none;color:var(--text);font-size:12px;font-family:'Noto Sans KR';width:100%;}
+.f-input:focus{background:rgba(124,106,247,0.04);}.f-input::placeholder{color:var(--text-muted);}
+.f-input.mono{font-family:var(--mono);font-size:11px;}
+textarea.f-input{resize:vertical;min-height:60px;}
+.platform-selector{display:flex;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);}
+.plat-btn{flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text-sub);font-size:11px;font-family:'Noto Sans KR';font-weight:700;cursor:pointer;transition:all .15s;}
+.plat-btn.dc-selected{background:var(--dc-dim);border-color:var(--dc);color:var(--dc);}
+.plat-btn.tw-selected{background:var(--tw-dim);border-color:var(--tw);color:var(--tw);}
+
+.archive-status-row{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.archive-badge{font-size:10px;padding:3px 10px;border-radius:4px;font-weight:700;cursor:pointer;border:none;font-family:'Noto Sans KR';transition:all .15s;}
+.badge-archived{background:var(--success-dim);color:var(--success);border:1px solid rgba(82,214,138,0.3);}
+.badge-not-archived{background:var(--warn-dim);color:var(--warn);border:1px solid rgba(247,199,106,0.3);}
+.badge-deleted{background:var(--deleted-dim);color:var(--deleted);border:1px solid rgba(247,81,106,0.3);}
+.archive-url-input{flex:1;background:var(--surface3);border:1px solid var(--border);border-radius:4px;padding:5px 10px;color:var(--text);font-size:11px;font-family:var(--mono);outline:none;}
+
+.connection-section{padding:12px 14px;}
+.connection-label{font-size:11px;color:var(--text-sub);margin-bottom:8px;font-weight:500;}
+.connection-tags{display:flex;flex-wrap:wrap;gap:6px;}
+.conn-tag{font-size:10px;padding:3px 10px;border-radius:12px;border:1px solid var(--border);background:var(--surface3);color:var(--text-sub);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;}
+.conn-tag.connected{border-color:var(--accent);background:var(--accent-dim);color:var(--accent2);}
+
+/* PDF Upload */
+.pdf-section{padding:12px 14px;border-top:1px solid var(--border);}
+.pdf-upload-area{border:1px dashed var(--border2);border-radius:6px;padding:14px;text-align:center;cursor:pointer;transition:all .15s;color:var(--text-muted);font-size:11px;}
+.pdf-upload-area:hover{border-color:var(--accent);color:var(--accent);}
+.pdf-list{margin-top:8px;display:flex;flex-direction:column;gap:6px;}
+.pdf-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface3);border-radius:4px;font-size:11px;}
+.pdf-item-name{flex:1;color:var(--text-sub);font-family:var(--mono);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pdf-item-del{color:var(--deleted);cursor:pointer;font-size:10px;padding:2px 6px;border-radius:3px;background:var(--deleted-dim);}
+
+.timeline-view{display:none;}.timeline-view.visible{display:block;}
+.timeline-title{font-size:16px;font-weight:700;margin-bottom:4px;}
+.timeline-sub{font-size:11px;color:var(--text-muted);margin-bottom:20px;}
+.timeline-track{position:relative;padding-left:24px;}
+.timeline-track::before{content:'';position:absolute;left:8px;top:0;bottom:0;width:1px;background:var(--border2);}
+.tl-item{position:relative;margin-bottom:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+.tl-item::before{content:'';position:absolute;left:-20px;top:16px;width:8px;height:8px;border-radius:50%;border:2px solid var(--bg);}
+.tl-item.dc-item::before{background:var(--dc);}.tl-item.tw-item::before{background:var(--tw);}
+.tl-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.tl-platform{font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;}
+.tl-platform.dc{background:var(--dc-dim);color:var(--dc);}.tl-platform.tw{background:var(--tw-dim);color:var(--tw);}
+.tl-date{font-size:10px;font-family:var(--mono);color:var(--text-muted);}
+.tl-del{font-size:9px;padding:2px 6px;border-radius:3px;background:var(--deleted-dim);color:var(--deleted);}
+.tl-archived-ok{font-size:9px;padding:2px 6px;border-radius:3px;background:var(--success-dim);color:var(--success);}
+.tl-summary{font-size:12px;color:var(--text-sub);margin-bottom:6px;}
+.tl-url{font-size:10px;font-family:var(--mono);color:var(--text-muted);word-break:break-all;}
+
+.export-panel{background:var(--surface);border-top:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:10px;}
+.export-info{flex:1;font-size:11px;color:var(--text-muted);}.export-info strong{color:var(--text-sub);}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+
+#print-document{display:none;}
+@media print{
+  @page{margin:18mm 16mm;size:A4;}
+  body{background:white!important;color:#111!important;font-size:11px;}
+  .app{display:none!important;}
+  #print-document{display:block!important;}
+  .pd-header{border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:20px;}
+  .pd-doctype{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#666;margin-bottom:6px;}
+  .pd-title{font-size:20px;font-weight:700;color:#111;margin-bottom:8px;}
+  .pd-meta{font-size:10px;color:#555;line-height:1.7;}.pd-meta strong{color:#111;}
+  .pd-notice{border:1px solid #999;border-radius:4px;padding:10px 14px;margin-bottom:20px;font-size:10px;color:#444;line-height:1.6;background:#f7f7f7;}
+  .pd-summary-table{width:100%;border-collapse:collapse;margin-bottom:24px;font-size:10px;}
+  .pd-summary-table td{border:1px solid #ccc;padding:6px 10px;}
+  .pd-summary-table .lbl{background:#f0f0f0;font-weight:700;width:130px;color:#333;}
+  .pd-section-title{font-size:13px;font-weight:700;color:#111;border-bottom:1px solid #111;padding-bottom:5px;margin:24px 0 14px;}
+  .pd-evidence{border:1px solid #bbb;border-radius:4px;margin-bottom:14px;page-break-inside:avoid;}
+  .pd-ev-header{background:#f0f0f0;padding:8px 12px;border-bottom:1px solid #bbb;display:flex;align-items:center;gap:8px;}
+  .pd-ev-num{font-weight:700;font-size:12px;color:#111;}
+  .pd-ev-platform{font-size:9px;padding:2px 8px;border-radius:3px;font-weight:700;border:1px solid;}
+  .pd-ev-platform.dc{color:#c5400f;border-color:#c5400f;}.pd-ev-platform.tw{color:#0b6cb0;border-color:#0b6cb0;}
+  .pd-ev-flag{font-size:9px;padding:2px 8px;border-radius:3px;font-weight:700;}
+  .pd-ev-flag.deleted{color:#c00;border:1px solid #c00;}.pd-ev-flag.archived{color:#0a7d3f;border:1px solid #0a7d3f;}
+  .pd-ev-body{padding:0;}
+  .pd-row{display:flex;border-bottom:1px solid #e5e5e5;}.pd-row:last-child{border-bottom:none;}
+  .pd-row .k{width:110px;flex-shrink:0;background:#fafafa;padding:6px 12px;font-weight:600;color:#444;font-size:10px;border-right:1px solid #e5e5e5;}
+  .pd-row .v{flex:1;padding:6px 12px;color:#111;font-size:10px;word-break:break-all;}.pd-row .v.empty{color:#aaa;font-style:italic;}
+  .pd-footer{margin-top:30px;padding-top:12px;border-top:1px solid #ccc;font-size:9px;color:#888;text-align:center;line-height:1.6;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">Evidence Archive</div>
+      <div class="sidebar-title">증거 아카이브</div>
+      <div class="sidebar-desc">실시간 동기화 — 팬들이 함께 증거를 수집·보존합니다.</div>
+      <div class="sync-status" id="sync-status"><div class="sync-dot"></div><span>연결 중...</span></div>
+    </div>
+    <div class="sidebar-stats">
+      <div class="stat-card"><div class="stat-val all" id="stat-all">0</div><div class="stat-lbl">전체</div></div>
+      <div class="stat-card"><div class="stat-val dc" id="stat-dc">0</div><div class="stat-lbl">DC</div></div>
+      <div class="stat-card"><div class="stat-val tw" id="stat-tw">0</div><div class="stat-lbl">TW</div></div>
+    </div>
+    <div class="sidebar-filter">
+      <button class="filter-btn active" onclick="setFilter('all',this)">전체</button>
+      <button class="filter-btn" onclick="setFilter('dc',this)">디씨</button>
+      <button class="filter-btn" onclick="setFilter('tw',this)">트위터</button>
+    </div>
+    <div class="evidence-list" id="evidence-list"></div>
+    <button class="add-evidence-btn" onclick="addEvidence()">+ 증거 추가</button>
+    <div class="backup-bar">
+      <button class="backup-btn backup-save" onclick="exportJSON()">💾 JSON 백업</button>
+      <button class="backup-btn backup-load" onclick="triggerImport()">📂 JSON 복원</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
+    </div>
+  </div>
+  <div class="main">
+    <div class="archive-banner">🗂 <span>실시간 동기화 — 모든 변경사항은 <strong>자동 저장</strong>됩니다. PDF 첨부 가능.</span></div>
+    <div class="main-toolbar">
+      <div class="toolbar-title" id="toolbar-title">증거를 선택하거나 새로 추가하세요</div>
+      <button class="toolbar-btn btn-timeline" onclick="toggleTimeline()">📅 타임라인</button>
+      <button class="toolbar-btn btn-archive" onclick="markArchived()" id="btn-archive" style="display:none">✓ 아카이브 완료</button>
+      <button class="toolbar-btn btn-delete-ev" onclick="deleteEvidence()" id="btn-delete-ev" style="display:none">삭제</button>
+      <button class="toolbar-btn btn-pdf" onclick="printPDF()">🖨 PDF 출력</button>
+    </div>
+    <div class="main-content" id="main-content">
+      <div class="empty-state" id="empty-state"><div class="empty-icon">🗂</div><div>증거를 추가하거나 선택하세요</div></div>
+      <div class="editor-form" id="editor-form" style="display:none">
+        <div class="smart-panel">
+          <div class="smart-header"><span>⚡</span><span class="smart-title">URL 자동 분석</span><span class="smart-badge">AUTO</span></div>
+          <div class="smart-body">
+            <div class="smart-row-label"><span class="smart-step-num">1</span> URL 붙여넣기 → 자동 추출</div>
+            <div class="smart-input-group"><input class="smart-input" id="smart-url" type="text" placeholder="https://gall.dcinside.com/... 또는 https://x.com/..."><button class="smart-btn" onclick="parseURL()">🔍 분석</button></div>
+            <div class="parse-result" id="parse-result"></div>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-header"><span>📌</span><span class="section-label">플랫폼 및 기본 정보</span></div>
+          <div class="platform-selector">
+            <button class="plat-btn" id="plat-dc" onclick="setPlatform('dc')">🟠 디씨인사이드</button>
+            <button class="plat-btn" id="plat-tw" onclick="setPlatform('tw')">🔵 트위터 X</button>
+          </div>
+          <div class="field-grid">
+            <div class="f-label">게시 날짜</div><input class="f-input mono" id="f-date" type="text" placeholder="2026.06.25 오전 9:42">
+            <div class="f-label">게시물 유형</div><input class="f-input" id="f-type" type="text" placeholder="게시글 / 댓글 / 트윗 / 저격글">
+            <div class="f-label">작성자</div><input class="f-input mono" id="f-author" type="text" placeholder="닉네임 또는 @핸들">
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-header"><span>🔗</span><span class="section-label">URL 및 아카이브 상태</span><span class="section-optional-badge" style="background:var(--success-dim);color:var(--success);">핵심</span></div>
+          <div class="field-grid">
+            <div class="f-label">원본 URL</div><input class="f-input mono" id="f-url" type="text" placeholder="https://...">
+          </div>
+          <div class="archive-status-row">
+            <span style="font-size:11px;color:var(--text-sub);font-weight:500;">아카이브:</span>
+            <button class="archive-badge badge-not-archived" id="archive-status-btn" onclick="cycleArchiveStatus()">미완료</button>
+            <input class="archive-url-input" id="f-archive-url" placeholder="archive.today URL">
+          </div>
+          <div class="field-grid">
+            <div class="f-label">스크린샷</div><input class="f-input mono" id="f-screenshot" type="text" placeholder="evidence_001.png">
+            <div class="f-label">캡처 상태</div><input class="f-input" id="f-has-capture" type="text" placeholder="원본 캡처 있음 / 메타데이터 무결">
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-header"><span>📝</span><span class="section-label">내용</span></div>
+          <div class="field-grid">
+            <div class="f-label">내용 요약</div><textarea class="f-input" id="f-summary" rows="3" placeholder="핵심 내용 간단 요약"></textarea>
+            <div class="f-label">삭제 여부</div><input class="f-input" id="f-deleted" type="text" placeholder="원본 존재 / 삭제됨 (캡처 보유)">
+          </div>
+        </div>
+        <div class="form-section optional-section">
+          <div class="form-section-header"><span>⚖</span><span class="section-label">법적 분류</span><span class="section-optional-badge" style="background:var(--warn-dim);color:var(--warn);">전문가 검토</span></div>
+          <div class="field-grid">
+            <div class="f-label">법적 분류</div><input class="f-input" id="f-legal" type="text" placeholder="비워두세요 — 전문가가 검토합니다">
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-header"><span>📎</span><span class="section-label">PDF 첨부</span></div>
+          <div class="pdf-section">
+            <div class="pdf-upload-area" id="pdf-upload-area" onclick="document.getElementById('pdf-file').click()">📄 PDF 파일을 클릭하여 업로드</div>
+            <input type="file" id="pdf-file" accept=".pdf" style="display:none" onchange="uploadPDF(event)">
+            <div class="pdf-list" id="pdf-list"></div>
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-header"><span>🔀</span><span class="section-label">연결 증거</span></div>
+          <div class="connection-section">
+            <div class="connection-label">연결되는 다른 증거 선택 (선택)</div>
+            <div class="connection-tags" id="connection-tags"></div>
+            <input class="f-input" id="f-connection-note" type="text" style="border:1px solid var(--border);border-radius:4px;background:var(--surface3);margin-top:10px;" placeholder="연결 관계 설명">
+          </div>
+        </div>
+        <div class="form-section">
+          <div class="form-section-header"><span>💬</span><span class="section-label">메모</span></div>
+          <div class="field-grid">
+            <div class="f-label">메모</div><textarea class="f-input" id="f-memo" rows="2" placeholder="참고사항, 수집자 등"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="timeline-view" id="timeline-view">
+        <div class="timeline-title">📅 증거 타임라인</div>
+        <div class="timeline-sub">날짜순 정렬</div>
+        <div class="timeline-track" id="timeline-track"></div>
+      </div>
+    </div>
+    <div class="export-panel">
+      <div class="export-info" id="export-info">증거 <strong>0건</strong> · 아카이브 완료 <strong>0건</strong></div>
+      <button class="toolbar-btn btn-pdf" onclick="printPDF()">🖨 PDF 출력</button>
+    </div>
+  </div>
+</div>
+<div id="print-document"></div>
+
+<script>
+// ═══ SUPABASE CONFIG ═══
+const SUPABASE_URL = 'https://stwupbkmahdxjbxpjzon.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_3HwFGx2ejc_20tynk7YHBQ_4u0KayNG';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let evidences = [];
+let currentId = null;
+let filter = 'all';
+let showTimeline = false;
+let saveTimer = null;
+const archiveCycle = ['미완료','완료','삭제됨'];
+
+function setSyncStatus(state, msg) {
+  const el = document.getElementById('sync-status');
+  el.className = 'sync-status' + (state === 'offline' ? ' offline' : state === 'syncing' ? ' syncing' : '');
+  el.querySelector('span').textContent = msg;
+}
+
+// ═══ SUPABASE CRUD ═══
+async function loadFromDB() {
+  setSyncStatus('syncing','동기화 중...');
+  try {
+    const {data,error} = await sb.from('evidences').select('*').order('created_at',{ascending:true});
+    if (error) throw error;
+    evidences = (data||[]).map((d,i) => ({
+      id:d.id, num:i+1, platform:d.platform, date:d.post_date||'', type:d.post_type||'',
+      author:d.author||'', url:d.original_url||'', archiveStatus:d.archive_status||'미완료',
+      archiveUrl:d.archive_url||'', screenshot:d.screenshot_file||'', hasCapture:d.capture_status||'',
+      summary:d.summary||'', legal:d.legal_category||'', deleted:d.deleted_status||'',
+      connections:d.connected_ids||[], connectionNote:d.connection_note||'', memo:d.memo||'',
+      pdfUrls:d.pdf_urls||[], pdfNames:d.pdf_names||[], createdAt:d.created_at
+    }));
+    renderList(); updateStats();
+    setSyncStatus('online','실시간 동기화 중');
+  } catch(e) {
+    console.error(e);
+    setSyncStatus('offline','연결 실패 — 오프라인 모드');
+  }
+}
+
+async function saveToDB(ev) {
+  setSyncStatus('syncing','저장 중...');
+  const row = {
+    id:ev.id, platform:ev.platform, post_date:ev.date, post_type:ev.type, author:ev.author,
+    original_url:ev.url, archive_url:ev.archiveUrl, archive_status:ev.archiveStatus,
+    screenshot_file:ev.screenshot, capture_status:ev.hasCapture, summary:ev.summary,
+    legal_category:ev.legal, deleted_status:ev.deleted, connected_ids:ev.connections,
+    connection_note:ev.connectionNote, memo:ev.memo, pdf_urls:ev.pdfUrls||[], pdf_names:ev.pdfNames||[]
+  };
+  try {
+    const {error} = await sb.from('evidences').upsert(row);
+    if (error) throw error;
+    setSyncStatus('online','실시간 동기화 중');
+  } catch(e) { console.error(e); setSyncStatus('offline','저장 실패'); }
+}
+
+async function deleteFromDB(id) {
+  try { await sb.from('evidences').delete().eq('id',id); } catch(e) { console.error(e); }
+}
+
+// ═══ REALTIME ═══
+function subscribeRealtime() {
+  sb.channel('evidences-changes').on('postgres_changes',{event:'*',schema:'public',table:'evidences'}, payload => {
+    console.log('Realtime:',payload.eventType);
+    loadFromDB();
+  }).subscribe();
+}
+
+// ═══ PDF UPLOAD ═══
+async function uploadPDF(event) {
+  const file = event.target.files[0]; if (!file || !currentId) return;
+  const ev = evidences.find(e => e.id === currentId); if (!ev) return;
+  setSyncStatus('syncing','PDF 업로드 중...');
+  const path = `${currentId}/${Date.now()}_${file.name}`;
+  try {
+    const {data,error} = await sb.storage.from('evidence-files').upload(path, file);
+    if (error) throw error;
+    const {data:urlData} = sb.storage.from('evidence-files').getPublicUrl(path);
+    if (!ev.pdfUrls) ev.pdfUrls = [];
+    if (!ev.pdfNames) ev.pdfNames = [];
+    ev.pdfUrls.push(urlData.publicUrl);
+    ev.pdfNames.push(file.name);
+    await saveToDB(ev);
+    renderPDFList(ev);
+    setSyncStatus('online','업로드 완료');
+  } catch(e) { console.error(e); alert('PDF 업로드 실패: '+e.message); setSyncStatus('offline','업로드 실패'); }
+  event.target.value = '';
+}
+
+function renderPDFList(ev) {
+  const list = document.getElementById('pdf-list'); list.innerHTML = '';
+  if (!ev.pdfUrls || ev.pdfUrls.length === 0) return;
+  ev.pdfUrls.forEach((url,i) => {
+    const item = document.createElement('div'); item.className = 'pdf-item';
+    item.innerHTML = `<span>📄</span><a href="${url}" target="_blank" class="pdf-item-name">${ev.pdfNames[i]||'파일'}</a><span class="pdf-item-del" onclick="removePDF(${i})">삭제</span>`;
+    list.appendChild(item);
+  });
+}
+
+async function removePDF(idx) {
+  if (!currentId) return;
+  const ev = evidences.find(e => e.id === currentId); if (!ev) return;
+  ev.pdfUrls.splice(idx,1); ev.pdfNames.splice(idx,1);
+  await saveToDB(ev); renderPDFList(ev);
+}
+
+// ═══ UI LOGIC ═══
+async function addEvidence() {
+  const id = crypto.randomUUID();
+  const ev = {id, num:evidences.length+1, platform:'dc', date:'', type:'', author:'', url:'',
+    archiveStatus:'미완료', archiveUrl:'', screenshot:'', hasCapture:'', summary:'', legal:'',
+    deleted:'', connections:[], connectionNote:'', memo:'', pdfUrls:[], pdfNames:[], createdAt:new Date().toISOString()};
+  evidences.push(ev);
+  await saveToDB(ev);
+  renderList(); selectEvidence(id); updateStats();
+}
+
+function selectEvidence(id) {
+  currentId = id; showTimeline = false;
+  document.getElementById('timeline-view').classList.remove('visible');
+  document.getElementById('editor-form').style.display = 'block';
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('btn-archive').style.display = '';
+  document.getElementById('btn-delete-ev').style.display = '';
+  const ev = evidences.find(e => e.id === id); if (!ev) return;
+  document.getElementById('toolbar-title').textContent = `#${ev.num} — ${ev.platform==='dc'?'디씨인사이드':'트위터 X'}`;
+  ['f-date','f-type','f-author','f-url','f-archive-url','f-screenshot','f-has-capture','f-summary','f-legal','f-deleted','f-connection-note','f-memo'].forEach(fid => {
+    const el = document.getElementById(fid); if (!el) return;
+    const key = {
+      'f-date':'date','f-type':'type','f-author':'author','f-url':'url','f-archive-url':'archiveUrl',
+      'f-screenshot':'screenshot','f-has-capture':'hasCapture','f-summary':'summary','f-legal':'legal',
+      'f-deleted':'deleted','f-connection-note':'connectionNote','f-memo':'memo'
+    }[fid];
+    el.value = ev[key] || '';
+  });
+  document.getElementById('smart-url').value = ev.url || '';
+  document.getElementById('parse-result').className = 'parse-result';
+  setPlatformUI(ev.platform); updateArchiveStatusUI(ev.archiveStatus); renderConnectionTags(id); renderPDFList(ev); renderList();
+}
+
+function setPlatform(p) {
+  if (!currentId) return;
+  const ev = evidences.find(e => e.id === currentId);
+  if (ev) { ev.platform = p; debounceSave(ev); renderList(); updateStats();
+    document.getElementById('toolbar-title').textContent = `#${ev.num} — ${p==='dc'?'디씨인사이드':'트위터 X'}`; }
+  setPlatformUI(p);
+}
+function setPlatformUI(p) {
+  document.getElementById('plat-dc').className = 'plat-btn'+(p==='dc'?' dc-selected':'');
+  document.getElementById('plat-tw').className = 'plat-btn'+(p==='tw'?' tw-selected':'');
+}
+
+function cycleArchiveStatus() {
+  if (!currentId) return;
+  const ev = evidences.find(e => e.id === currentId);
+  ev.archiveStatus = archiveCycle[(archiveCycle.indexOf(ev.archiveStatus)+1)%archiveCycle.length];
+  updateArchiveStatusUI(ev.archiveStatus); debounceSave(ev); renderList(); updateStats();
+}
+function updateArchiveStatusUI(s) {
+  const btn = document.getElementById('archive-status-btn');
+  btn.textContent = s;
+  btn.className = 'archive-badge '+(s==='완료'?'badge-archived':s==='삭제됨'?'badge-deleted':'badge-not-archived');
+}
+function markArchived() {
+  if (!currentId) return;
+  const ev = evidences.find(e => e.id === currentId);
+  ev.archiveStatus = '완료'; updateArchiveStatusUI('완료'); renderList(); saveCurrentForm();
+}
+
+function saveCurrentForm() {
+  if (!currentId) return;
+  const ev = evidences.find(e => e.id === currentId); if (!ev) return;
+  ev.date = document.getElementById('f-date').value;
+  ev.type = document.getElementById('f-type').value;
+  ev.author = document.getElementById('f-author').value;
+  ev.url = document.getElementById('f-url').value;
+  ev.archiveUrl = document.getElementById('f-archive-url').value;
+  ev.screenshot = document.getElementById('f-screenshot').value;
+  ev.hasCapture = document.getElementById('f-has-capture').value;
+  ev.summary = document.getElementById('f-summary').value;
+  ev.legal = document.getElementById('f-legal').value;
+  ev.deleted = document.getElementById('f-deleted').value;
+  ev.connectionNote = document.getElementById('f-connection-note').value;
+  ev.memo = document.getElementById('f-memo').value;
+  debounceSave(ev); renderList(); updateStats();
+}
+
+function debounceSave(ev) {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => saveToDB(ev), 800);
+}
+
+function renderConnectionTags(curId) {
+  const c = document.getElementById('connection-tags'); c.innerHTML = '';
+  const cur = evidences.find(e => e.id === curId);
+  if (evidences.length <= 1) { c.innerHTML = '<span style="font-size:11px;color:var(--text-muted);">증거 2건 이상 시 연결 가능</span>'; return; }
+  evidences.forEach(ev => {
+    if (ev.id === curId) return;
+    const tag = document.createElement('div');
+    const isC = cur.connections.includes(ev.id);
+    tag.className = 'conn-tag'+(isC?' connected':'');
+    tag.innerHTML = `<span class="platform-dot dot-${ev.platform}"></span>#${ev.num} ${ev.summary?ev.summary.slice(0,12)+'…':'(미입력)'}${isC?' ✕':''}`;
+    tag.onclick = () => { const i = cur.connections.indexOf(ev.id); if(i>=0) cur.connections.splice(i,1); else cur.connections.push(ev.id); debounceSave(cur); renderConnectionTags(curId); };
+    c.appendChild(tag);
+  });
+}
+
+async function deleteEvidence() {
+  if (!currentId || !confirm('이 증거를 삭제할까요?')) return;
+  await deleteFromDB(currentId);
+  evidences = evidences.filter(e => e.id !== currentId);
+  evidences.forEach((e,i) => e.num = i+1);
+  currentId = null;
+  document.getElementById('editor-form').style.display = 'none';
+  document.getElementById('empty-state').style.display = '';
+  document.getElementById('btn-archive').style.display = 'none';
+  document.getElementById('btn-delete-ev').style.display = 'none';
+  document.getElementById('toolbar-title').textContent = '증거를 선택하거나 새로 추가하세요';
+  renderList(); updateStats();
+}
+
+function setFilter(f,btn) {
+  filter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.className='filter-btn');
+  btn.classList.add(f==='dc'?'dc-active':f==='tw'?'tw-active':'active');
+  renderList();
+}
+
+function renderList() {
+  const list = document.getElementById('evidence-list');
+  const filtered = filter==='all' ? evidences : evidences.filter(e => e.platform===filter);
+  list.innerHTML = '';
+  if (!filtered.length) { list.innerHTML = '<div style="padding:16px;font-size:11px;color:var(--text-muted);text-align:center;">증거가 없습니다</div>'; return; }
+  filtered.forEach(ev => {
+    const item = document.createElement('div');
+    const isDel = ev.deleted && ev.deleted.includes('삭제');
+    item.className = 'ev-item'+(ev.id===currentId?' active':'')+(isDel?' deleted-item':'');
+    item.innerHTML = `<div class="ev-item-top"><span class="platform-dot dot-${ev.platform}"></span><span class="ev-num">#${ev.num}</span><span class="ev-type-tag tag-${ev.platform}">${ev.platform==='dc'?'DC':'TW'}</span>${isDel?'<span class="del-tag">삭제됨</span>':''}${ev.archiveStatus==='완료'?'<span class="archived-tag">✓ 저장</span>':''}</div><div class="ev-item-date">${ev.date||'날짜 미입력'}</div><div class="ev-item-summary">${ev.summary||ev.type||'(미입력)'}</div>`;
+    item.onclick = () => { saveCurrentForm(); selectEvidence(ev.id); };
+    list.appendChild(item);
+  });
+}
+
+function updateStats() {
+  document.getElementById('stat-all').textContent = evidences.length;
+  document.getElementById('stat-dc').textContent = evidences.filter(e => e.platform==='dc').length;
+  document.getElementById('stat-tw').textContent = evidences.filter(e => e.platform==='tw').length;
+  const archived = evidences.filter(e => e.archiveStatus==='완료').length;
+  document.getElementById('export-info').innerHTML = `증거 <strong>${evidences.length}건</strong> · 아카이브 완료 <strong>${archived}건</strong>`;
+}
+
+function toggleTimeline() {
+  saveCurrentForm(); showTimeline = !showTimeline;
+  document.getElementById('timeline-view').classList.toggle('visible',showTimeline);
+  document.getElementById('editor-form').style.display = (!showTimeline&&currentId)?'block':'none';
+  document.getElementById('empty-state').style.display = (!showTimeline&&!currentId)?'':'none';
+  if (showTimeline) renderTimeline();
+}
+function renderTimeline() {
+  const track = document.getElementById('timeline-track');
+  const sorted = [...evidences].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+  track.innerHTML = '';
+  if (!sorted.length) { track.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">증거 없음</div>'; return; }
+  sorted.forEach(ev => {
+    const item = document.createElement('div');
+    item.className = `tl-item ${ev.platform}-item`;
+    item.innerHTML = `<div class="tl-top"><span class="tl-platform ${ev.platform}">${ev.platform==='dc'?'디씨인사이드':'트위터 X'}</span><span class="tl-date">${ev.date||'날짜 미입력'}</span>${ev.deleted&&ev.deleted.includes('삭제')?'<span class="tl-del">삭제됨</span>':''}${ev.archiveStatus==='완료'?'<span class="tl-archived-ok">✓ 아카이브</span>':''}<span style="font-size:10px;color:var(--text-muted);margin-left:auto;">#${ev.num}</span></div><div class="tl-summary">${ev.summary||'(미입력)'}</div>${ev.url?`<div class="tl-url">${ev.url}</div>`:''}`;
+    track.appendChild(item);
+  });
+}
+
+// ═══ URL PARSE ═══
+function parseURL() {
+  const url = document.getElementById('smart-url').value.trim();
+  const result = document.getElementById('parse-result');
+  if (!url) { result.className='parse-result show error'; result.textContent='URL을 입력하세요'; return; }
+  if (!currentId) { result.className='parse-result show error'; result.textContent='먼저 증거 항목을 선택하세요'; return; }
+  const ev = evidences.find(e => e.id===currentId);
+  let lines=[], platform=null, author=null;
+  if (/dcinside\.com/i.test(url)) {
+    platform = 'dc';
+    const mM = url.match(/m\.dcinside\.com\/board\/([^\/]+)\/(\d+)/i);
+    const idM = url.match(/[?&]id=([^&]+)/i), noM = url.match(/[?&]no=(\d+)/i);
+    let gallery=mM?mM[1]:(idM?idM[1]:null), postNo=mM?mM[2]:(noM?noM[1]:null);
+    lines.push('✓ 플랫폼: 디씨인사이드');
+    if (gallery) lines.push('✓ 갤러리: '+gallery);
+    if (postNo) lines.push('✓ 게시물: '+postNo);
+  } else if (/(twitter\.com|x\.com)/i.test(url)) {
+    platform = 'tw';
+    const m = url.match(/(?:twitter\.com|x\.com)\/([^\/]+)\/status\/(\d+)/i);
+    if (m) { author='@'+m[1]; lines.push('✓ 플랫폼: 트위터 X','✓ 작성자: '+author,'✓ 트윗 ID: '+m[2]); }
+    else lines.push('✓ 플랫폼: 트위터 X');
+  } else { result.className='parse-result show error'; result.textContent='디씨/트위터 URL만 지원'; return; }
+  ev.platform = platform; ev.url = url; if (author) ev.author = author;
+  setPlatformUI(platform);
+  document.getElementById('f-url').value = url;
+  if (author) document.getElementById('f-author').value = author;
+  document.getElementById('toolbar-title').textContent = `#${ev.num} — ${platform==='dc'?'디씨인사이드':'트위터 X'}`;
+  result.className='parse-result show';
+  result.innerHTML = lines.join('<br>')+'<br><span style="color:var(--text-muted)">→ 자동 입력 완료</span>';
+  debounceSave(ev); renderList(); updateStats();
+}
+
+// ═══ JSON BACKUP (FALLBACK) ═══
+function exportJSON() {
+  saveCurrentForm();
+  const payload = {version:3, exportedAt:new Date().toISOString(), count:evidences.length, evidences};
+  const blob = new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `증거백업_${new Date().toISOString().slice(0,10)}.json`; a.click();
+}
+function triggerImport() { document.getElementById('import-file').click(); }
+async function importJSON(event) {
+  const file = event.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async(e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const loaded = Array.isArray(data)?data:data.evidences;
+      if (!Array.isArray(loaded)) throw new Error('형식 오류');
+      if (!confirm(`${loaded.length}건의 증거를 서버에 업로드할까요?`)) return;
+      for (const ev of loaded) {
+        ev.id = ev.id || crypto.randomUUID();
+        evidences.push(ev);
+        await saveToDB(ev);
+      }
+      evidences.forEach((e,i) => e.num=i+1);
+      renderList(); updateStats();
+      alert(`업로드 완료: ${loaded.length}건`);
+    } catch(err) { alert('불러오기 실패: '+err.message); }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ═══ PDF PRINT ═══
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function row(k,v,isEmpty){return `<div class="pd-row"><div class="k">${k}</div><div class="v${isEmpty?' empty':''}">${isEmpty?'(미입력)':esc(v)}</div></div>`;}
+
+function printPDF() {
+  if (!evidences.length) { alert('증거를 먼저 추가하세요.'); return; }
+  saveCurrentForm();
+  const now = new Date();
+  const dcC=evidences.filter(e=>e.platform==='dc').length, twC=evidences.filter(e=>e.platform==='tw').length;
+  const arC=evidences.filter(e=>e.archiveStatus==='완료').length, delC=evidences.filter(e=>e.deleted&&e.deleted.includes('삭제')).length;
+  let html = `<div class="pd-header"><div class="pd-doctype">Cyber Harassment Evidence Log</div><div class="pd-title">사이버 피해 증거 목록</div><div class="pd-meta"><strong>작성일시:</strong> ${now.toLocaleString('ko-KR')}<br><strong>총 증거:</strong> ${evidences.length}건 (DC ${dcC} / TW ${twC})</div></div>
+  <div class="pd-notice">본 문서는 팬덤 구성원이 자발적으로 수집·정리한 증거 아카이브 목록입니다. 각 항목의 원본은 첨부 스크린샷 및 archive.today 저장본으로 보존되어 있습니다.</div>
+  <table class="pd-summary-table"><tr><td class="lbl">전체 증거</td><td>${evidences.length}건</td><td class="lbl">아카이브 완료</td><td>${arC}건</td></tr><tr><td class="lbl">디씨</td><td>${dcC}건</td><td class="lbl">트위터</td><td>${twC}건</td></tr><tr><td class="lbl">삭제된 게시물</td><td>${delC}건</td><td class="lbl">미아카이브</td><td>${evidences.length-arC}건</td></tr></table>
+  <div class="pd-section-title">증거 상세 목록</div>`;
+  const sorted = [...evidences].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  sorted.forEach(ev => {
+    const isDel = ev.deleted&&ev.deleted.includes('삭제');
+    html += `<div class="pd-evidence"><div class="pd-ev-header"><span class="pd-ev-num">#${ev.num}</span><span class="pd-ev-platform ${ev.platform}">${ev.platform==='dc'?'디씨인사이드':'트위터 X'}</span>${isDel?'<span class="pd-ev-flag deleted">삭제됨</span>':''}${ev.archiveStatus==='완료'?'<span class="pd-ev-flag archived">아카이브 완료</span>':''}</div><div class="pd-ev-body">
+    ${row('게시 날짜',ev.date,!ev.date)}${row('유형',ev.type,!ev.type)}${row('작성자',ev.author,!ev.author)}
+    ${row('원본 URL',ev.url,!ev.url)}${row('아카이브 URL',ev.archiveUrl,!ev.archiveUrl)}
+    ${row('스크린샷',ev.screenshot,!ev.screenshot)}${row('캡처 상태',ev.hasCapture,!ev.hasCapture)}
+    ${row('내용 요약',ev.summary,!ev.summary)}${row('삭제 여부',ev.deleted,!ev.deleted)}
+    ${row('법적 분류',ev.legal,!ev.legal)}${ev.memo?row('메모',ev.memo):''}
+    ${ev.pdfNames&&ev.pdfNames.length?row('첨부 PDF',ev.pdfNames.join(', ')):''}</div></div>`;
+  });
+  html += `<div class="pd-footer">증거 아카이브 시스템으로 생성 · ${now.toLocaleDateString('ko-KR')} · 원본 캡처 파일 및 archive.today 저장본과 함께 제출하십시오.</div>`;
+  document.getElementById('print-document').innerHTML = html;
+  window.print();
+}
+
+// ═══ INIT ═══
+document.addEventListener('DOMContentLoaded', () => {
+  ['f-date','f-type','f-author','f-url','f-archive-url','f-screenshot','f-has-capture','f-summary','f-legal','f-deleted','f-connection-note','f-memo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', saveCurrentForm);
+  });
+  loadFromDB();
+  subscribeRealtime();
+});
+</script>
+</body>
+</html>
